@@ -1,0 +1,884 @@
+diff --git a/.cirrus.yml b/.cirrus.yml
+index 4fddac53..75de1e90 100644
+--- a/.cirrus.yml
++++ b/.cirrus.yml
+@@ -1,7 +1,7 @@
+ task:
+   name: freebsd-x86_64
+   freebsd_instance:
+-    image_family: freebsd-13-2
++    image_family: freebsd-13-1
+   install_script: |
+     pkg install -y \
+       git \
+diff --git a/bindings/gumjs/gumquickprocess.c b/bindings/gumjs/gumquickprocess.c
+index ed2c9968..5db95104 100644
+--- a/bindings/gumjs/gumquickprocess.c
++++ b/bindings/gumjs/gumquickprocess.c
+@@ -1,7 +1,6 @@
+ /*
+  * Copyright (C) 2020-2022 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+  * Copyright (C) 2020-2023 Francesco Tamagni <mrmacete@protonmail.ch>
+- * Copyright (C) 2023 Grant Douglas <me@hexplo.it>
+  *
+  * Licence: wxWindows Library Licence, Version 3.1
+  */
+@@ -292,13 +291,6 @@ gum_emit_thread (const GumThreadDetails * details,
+       GUM_QUICK_CORE_ATOM (core, id),
+       JS_NewInt64 (ctx, details->id),
+       JS_PROP_C_W_E);
+-  if (details->name != NULL)
+-  {
+-    JS_DefinePropertyValue (ctx, thread,
+-        GUM_QUICK_CORE_ATOM (core, name),
+-        JS_NewString (ctx, details->name),
+-        JS_PROP_C_W_E);
+-  }
+   JS_DefinePropertyValue (ctx, thread,
+       GUM_QUICK_CORE_ATOM (core, state),
+       _gum_quick_thread_state_new (ctx, details->state),
+diff --git a/bindings/gumjs/gumscriptscheduler.c b/bindings/gumjs/gumscriptscheduler.c
+index b86a6c57..2459c874 100644
+--- a/bindings/gumjs/gumscriptscheduler.c
++++ b/bindings/gumjs/gumscriptscheduler.c
+@@ -114,7 +114,7 @@ gum_script_scheduler_start (GumScriptScheduler * self)
+   {
+     self->js_loop = g_main_loop_new (self->js_context, TRUE);
+ 
+-    self->js_thread = g_thread_new ("gum-js-loop",
++    self->js_thread = g_thread_new ("banana-gjs-loop",
+         (GThreadFunc) gum_script_scheduler_run_js_loop, self);
+   }
+ }
+diff --git a/bindings/gumjs/gumv8process.cpp b/bindings/gumjs/gumv8process.cpp
+index 56942790..19eaf571 100644
+--- a/bindings/gumjs/gumv8process.cpp
++++ b/bindings/gumjs/gumv8process.cpp
+@@ -1,7 +1,6 @@
+ /*
+  * Copyright (C) 2010-2022 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+  * Copyright (C) 2020-2023 Francesco Tamagni <mrmacete@protonmail.ch>
+- * Copyright (C) 2023 Grant Douglas <me@hexplo.it>
+  *
+  * Licence: wxWindows Library Licence, Version 3.1
+  */
+@@ -252,8 +251,6 @@ gum_emit_thread (const GumThreadDetails * details,
+ 
+   auto thread = Object::New (isolate);
+   _gum_v8_object_set (thread, "id", Number::New (isolate, details->id), core);
+-  if (details->name != NULL)
+-    _gum_v8_object_set_utf8 (thread, "name", details->name, core);
+   _gum_v8_object_set (thread, "state", _gum_v8_string_new_ascii (isolate,
+       _gum_v8_thread_state_to_string (details->state)), core);
+   auto cpu_context =
+diff --git a/gum/backend-darwin/gumprocess-darwin.c b/gum/backend-darwin/gumprocess-darwin.c
+index 0e7d39ca..a620827e 100644
+--- a/gum/backend-darwin/gumprocess-darwin.c
++++ b/gum/backend-darwin/gumprocess-darwin.c
+@@ -4,7 +4,6 @@
+  * Copyright (C) 2022-2023 Francesco Tamagni <mrmacete@protonmail.ch>
+  * Copyright (C) 2022 Håvard Sørbø <havard@hsorbo.no>
+  * Copyright (C) 2023 Alex Soler <asoler@nowsecure.com>
+- * Copyright (C) 2023 Grant Douglas <me@hexplo.it>
+  *
+  * Licence: wxWindows Library Licence, Version 3.1
+  */
+@@ -1499,7 +1498,6 @@ gum_darwin_enumerate_threads (mach_port_t task,
+       thread_basic_info_data_t info;
+       mach_msg_type_number_t info_count = THREAD_BASIC_INFO_COUNT;
+       GumDarwinUnifiedThreadState state;
+-      gchar thread_name[64];
+ 
+       kr = thread_info (thread, THREAD_BASIC_INFO, (thread_info_t) &info,
+           &info_count);
+@@ -1521,21 +1519,7 @@ gum_darwin_enumerate_threads (mach_port_t task,
+ #endif
+ 
+       details.id = (GumThreadId) thread;
+-
+-      details.name = NULL;
+-      if (task == self)
+-      {
+-        pthread_t th = pthread_from_mach_thread_np (thread);
+-        if (th != NULL)
+-        {
+-          pthread_getname_np (th, thread_name, sizeof (thread_name));
+-          if (thread_name[0] != '\0')
+-            details.name = thread_name;
+-        }
+-      }
+-
+       details.state = gum_thread_state_from_darwin (info.run_state);
+-
+       gum_darwin_parse_unified_thread_state (&state, &details.cpu_context);
+ 
+       if (!func (&details, user_data))
+diff --git a/gum/backend-freebsd/gumprocess-freebsd.c b/gum/backend-freebsd/gumprocess-freebsd.c
+index 4740d7b4..e8bfebd6 100644
+--- a/gum/backend-freebsd/gumprocess-freebsd.c
++++ b/gum/backend-freebsd/gumprocess-freebsd.c
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (C) 2022-2024 Ole André Vadla Ravnås <oleavr@nowsecure.com>
++ * Copyright (C) 2022-2023 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+  * Copyright (C) 2023 Francesco Tamagni <mrmacete@protonmail.ch>
+  *
+  * Licence: wxWindows Library Licence, Version 3.1
+@@ -408,7 +408,6 @@ _gum_process_enumerate_threads (GumFoundThreadFunc func,
+     GumThreadDetails details;
+ 
+     details.id = p->ki_tid;
+-    details.name = (p->ki_tdname[0] != '\0') ? p->ki_tdname : NULL;
+     details.state = gum_thread_state_from_proc (p);
+     if (!gum_process_modify_thread (details.id, gum_store_cpu_context,
+           &details.cpu_context, GUM_MODIFY_THREAD_FLAGS_ABORT_SAFELY))
+diff --git a/gum/backend-linux/gumprocess-linux.c b/gum/backend-linux/gumprocess-linux.c
+index f9e2d6a1..26183feb 100644
+--- a/gum/backend-linux/gumprocess-linux.c
++++ b/gum/backend-linux/gumprocess-linux.c
+@@ -2,7 +2,6 @@
+  * Copyright (C) 2010-2023 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+  * Copyright (C) 2023 Håvard Sørbø <havard@hsorbo.no>
+  * Copyright (C) 2023 Francesco Tamagni <mrmacete@protonmail.ch>
+- * Copyright (C) 2023 Grant Douglas <me@hexplo.it>
+  *
+  * Licence: wxWindows Library Licence, Version 3.1
+  */
+@@ -258,7 +257,6 @@ static void gum_proc_maps_iter_init_for_path (GumProcMapsIter * iter,
+ static void gum_acquire_dumpability (void);
+ static void gum_release_dumpability (void);
+ 
+-static gchar * gum_thread_read_name (GumThreadId thread_id);
+ static gboolean gum_thread_read_state (GumThreadId tid, GumThreadState * state);
+ static GumThreadState gum_thread_state_from_proc_status_character (gchar c);
+ static GumPageProtection gum_page_protection_from_proc_perms_string (
+@@ -723,6 +721,7 @@ gboolean
+ gum_process_has_thread (GumThreadId thread_id)
+ {
+   gchar path[16 + 20 + 1];
++
+   sprintf (path, "/proc/self/task/%" G_GSIZE_MODIFIER "u", thread_id);
+ 
+   return g_file_test (path, G_FILE_TEST_EXISTS);
+@@ -1022,13 +1021,8 @@ _gum_process_enumerate_threads (GumFoundThreadFunc func,
+   while (carry_on && (name = g_dir_read_name (dir)) != NULL)
+   {
+     GumThreadDetails details;
+-    gchar * thread_name;
+ 
+     details.id = atoi (name);
+-
+-    thread_name = gum_thread_read_name (details.id);
+-    details.name = thread_name;
+-
+     if (gum_thread_read_state (details.id, &details.state))
+     {
+       if (gum_process_modify_thread (details.id, gum_store_cpu_context,
+@@ -1037,8 +1031,6 @@ _gum_process_enumerate_threads (GumFoundThreadFunc func,
+         carry_on = func (&details, user_data);
+       }
+     }
+-
+-    g_free (thread_name);
+   }
+ 
+   g_dir_close (dir);
+@@ -2679,26 +2671,6 @@ gum_unparse_regs (const GumCpuContext * ctx,
+ #endif
+ }
+ 
+-static gchar *
+-gum_thread_read_name (GumThreadId thread_id)
+-{
+-  gchar * name = NULL;
+-  gchar * path;
+-  gchar * comm = NULL;
+-
+-  path = g_strdup_printf ("/proc/self/task/%" G_GSIZE_FORMAT "/comm",
+-      thread_id);
+-  if (!g_file_get_contents (path, &comm, NULL, NULL))
+-    goto beach;
+-  name = g_strchomp (g_steal_pointer (&comm));
+-
+-beach:
+-  g_free (comm);
+-  g_free (path);
+-
+-  return name;
+-}
+-
+ static gboolean
+ gum_thread_read_state (GumThreadId tid,
+                        GumThreadState * state)
+diff --git a/gum/backend-posix/gummemory-posix.c b/gum/backend-posix/gummemory-posix.c
+index 848b430a..6be5b5a8 100644
+--- a/gum/backend-posix/gummemory-posix.c
++++ b/gum/backend-posix/gummemory-posix.c
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (C) 2008-2024 Ole André Vadla Ravnås <oleavr@nowsecure.com>
++ * Copyright (C) 2008-2022 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+  *
+  * Licence: wxWindows Library Licence, Version 3.1
+  */
+@@ -34,14 +34,12 @@ struct _GumEnumerateFreeRangesContext
+   GumAddress prev_end;
+ };
+ 
+-static gpointer gum_memory_allocate_internal (gpointer address, gsize size,
+-    gsize alignment, GumPageProtection prot, gint extra_flags);
+ static gboolean gum_try_alloc_in_range_if_near_enough (
+     const GumRangeDetails * details, gpointer user_data);
+ static gboolean gum_try_suggest_allocation_base (const GumMemoryRange * range,
+     const GumAllocNearContext * ctx, gpointer * allocation_base);
+ static gpointer gum_allocate_page_aligned (gpointer address, gsize size,
+-    gint prot, gint extra_flags);
++    gint prot);
+ static void gum_enumerate_free_ranges (GumFoundRangeFunc func,
+     gpointer user_data);
+ static gboolean gum_emit_free_range (const GumRangeDetails * details,
+@@ -123,16 +121,6 @@ gum_memory_allocate (gpointer address,
+                      gsize size,
+                      gsize alignment,
+                      GumPageProtection prot)
+-{
+-  return gum_memory_allocate_internal (address, size, alignment, prot, 0);
+-}
+-
+-static gpointer
+-gum_memory_allocate_internal (gpointer address,
+-                              gsize size,
+-                              gsize alignment,
+-                              GumPageProtection prot,
+-                              gint extra_flags)
+ {
+   gsize page_size, allocation_size;
+   guint8 * base, * aligned_base;
+@@ -144,7 +132,7 @@ gum_memory_allocate_internal (gpointer address,
+   allocation_size = GUM_ALIGN_SIZE (allocation_size, page_size);
+ 
+   base = gum_allocate_page_aligned (address, allocation_size,
+-      _gum_page_protection_to_posix (prot), extra_flags);
++      _gum_page_protection_to_posix (prot));
+   if (base == NULL)
+     return NULL;
+ 
+@@ -209,16 +197,6 @@ gum_try_alloc_in_range_if_near_enough (const GumRangeDetails * details,
+   if (!gum_try_suggest_allocation_base (details->range, ctx, &suggested_base))
+     goto keep_looking;
+ 
+-#ifdef HAVE_FREEBSD
+-  received_base = gum_memory_allocate_internal (suggested_base, ctx->size,
+-      ctx->alignment, ctx->prot, MAP_FIXED | MAP_EXCL);
+-  if (received_base != NULL)
+-  {
+-    ctx->result = received_base;
+-    return FALSE;
+-  }
+-#endif
+-
+   received_base = gum_memory_allocate (suggested_base, ctx->size,
+       ctx->alignment, ctx->prot);
+   if (received_base == NULL)
+@@ -267,29 +245,29 @@ gum_try_suggest_allocation_base (const GumMemoryRange * range,
+ static gpointer
+ gum_allocate_page_aligned (gpointer address,
+                            gsize size,
+-                           gint prot,
+-                           gint extra_flags)
++                           gint prot)
+ {
+   gpointer result;
+-  const gint base_flags = MAP_PRIVATE | MAP_ANONYMOUS | extra_flags;
+-  gint region_flags = 0;
++  int extra_flags = 0;
+ 
+ #if defined (HAVE_FREEBSD) && GLIB_SIZEOF_VOID_P == 8
+   if (address != NULL &&
+       GPOINTER_TO_SIZE (address) + size < G_MAXUINT32)
+   {
+-    region_flags |= MAP_32BIT;
++    extra_flags |= MAP_32BIT;
+   }
+ #endif
+ 
+-  result = mmap (address, size, prot, base_flags | region_flags, -1, 0);
++  result = mmap (address, size, prot, MAP_PRIVATE | MAP_ANONYMOUS | extra_flags,
++      -1, 0);
+ 
+ #if defined (HAVE_FREEBSD) && GLIB_SIZEOF_VOID_P == 8
+-  if (result == MAP_FAILED && (region_flags & MAP_32BIT) != 0)
++  if (result == MAP_FAILED && (extra_flags & MAP_32BIT) != 0)
+   {
+-    result = mmap (NULL, size, prot, base_flags | region_flags, -1, 0);
++    result = mmap (NULL, size, prot, MAP_PRIVATE | MAP_ANONYMOUS |
++        extra_flags, -1, 0);
+     if (result == MAP_FAILED)
+-      result = mmap (address, size, prot, base_flags, -1, 0);
++      result = mmap (address, size, prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+   }
+ #endif
+ 
+diff --git a/gum/backend-qnx/gumprocess-qnx.c b/gum/backend-qnx/gumprocess-qnx.c
+index 742cf595..1c863a68 100644
+--- a/gum/backend-qnx/gumprocess-qnx.c
++++ b/gum/backend-qnx/gumprocess-qnx.c
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (C) 2015-2024 Ole André Vadla Ravnås <oleavr@nowsecure.com>
++ * Copyright (C) 2015-2023 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+  * Copyright (C) 2023 Francesco Tamagni <mrmacete@protonmail.ch>
+  *
+  * Licence: wxWindows Library Licence, Version 3.1
+@@ -238,20 +238,8 @@ _gum_process_enumerate_threads (GumFoundThreadFunc func,
+       (devctl (fd, DCMD_PROC_TIDSTATUS, &thread, sizeof (thread), NULL) == 0))
+   {
+     GumThreadDetails details;
+-    gchar thread_name[_NTO_THREAD_NAME_MAX];
+ 
+     details.id = thread.tid;
+-
+-    if (pthread_getname_np (thread.tid, thread_name,
+-          sizeof (thread_name)) == 0 && thread_name[0] != '\0')
+-    {
+-      details.name = thread_name;
+-    }
+-    else
+-    {
+-      details.name = NULL;
+-    }
+-
+     details.state = gum_thread_state_from_system_thread_state (thread.state);
+ 
+     if (thread.state != STATE_DEAD &&
+diff --git a/gum/backend-windows/gumprocess-windows.c b/gum/backend-windows/gumprocess-windows.c
+index 5a99772e..72cc3566 100644
+--- a/gum/backend-windows/gumprocess-windows.c
++++ b/gum/backend-windows/gumprocess-windows.c
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (C) 2009-2024 Ole André Vadla Ravnås <oleavr@nowsecure.com>
++ * Copyright (C) 2009-2023 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+  * Copyright (C) 2023 Francesco Tamagni <mrmacete@protonmail.ch>
+  *
+  * Licence: wxWindows Library Licence, Version 3.1
+@@ -21,8 +21,6 @@
+ # pragma GCC diagnostic ignored "-Warray-bounds"
+ #endif
+ 
+-typedef HRESULT (WINAPI * GumGetThreadDescriptionFunc) (
+-    HANDLE thread, WCHAR ** description);
+ typedef void (WINAPI * GumGetCurrentThreadStackLimitsFunc) (
+     PULONG_PTR low_limit, PULONG_PTR high_limit);
+ typedef struct _GumEnumerateSymbolsContext GumEnumerateSymbolsContext;
+@@ -208,10 +206,6 @@ gum_windows_get_thread_details (DWORD thread_id,
+                                 GumThreadDetails * details)
+ {
+   gboolean success = FALSE;
+-  static gsize initialized = FALSE;
+-  static GumGetThreadDescriptionFunc get_thread_description;
+-  static DWORD desired_access;
+-  HANDLE thread = NULL;
+ #ifdef _MSC_VER
+   __declspec (align (64))
+ #endif
+@@ -221,43 +215,8 @@ gum_windows_get_thread_details (DWORD thread_id,
+ #endif
+         = { 0, };
+ 
+-  memset (details, 0, sizeof (GumThreadDetails));
+-
+-  if (g_once_init_enter (&initialized))
+-  {
+-    get_thread_description = (GumGetThreadDescriptionFunc) GetProcAddress (
+-        GetModuleHandle (_T ("kernel32.dll")),
+-        "GetThreadDescription");
+-
+-    desired_access = THREAD_GET_CONTEXT | THREAD_SUSPEND_RESUME;
+-    if (get_thread_description != NULL)
+-      desired_access |= THREAD_QUERY_LIMITED_INFORMATION;
+-
+-    g_once_init_leave (&initialized, TRUE);
+-  }
+-
+-  thread = OpenThread (desired_access, FALSE, thread_id);
+-  if (thread == NULL)
+-    goto beach;
+-
+   details->id = thread_id;
+ 
+-  if (get_thread_description != NULL)
+-  {
+-    WCHAR * name_utf16;
+-
+-    if (!SUCCEEDED (get_thread_description (thread, &name_utf16)))
+-      goto beach;
+-
+-    if (name_utf16[0] != L'\0')
+-    {
+-      details->name = g_utf16_to_utf8 ((const gunichar2 *) name_utf16, -1, NULL,
+-          NULL, NULL);
+-    }
+-
+-    LocalFree (name_utf16);
+-  }
+-
+   if (thread_id == GetCurrentThreadId ())
+   {
+     details->state = GUM_THREAD_RUNNING;
+@@ -269,34 +228,36 @@ gum_windows_get_thread_details (DWORD thread_id,
+   }
+   else
+   {
+-    DWORD previous_suspend_count;
++    HANDLE thread;
+ 
+-    previous_suspend_count = SuspendThread (thread);
+-    if (previous_suspend_count == (DWORD) -1)
+-      goto beach;
++    thread = OpenThread (THREAD_GET_CONTEXT | THREAD_SUSPEND_RESUME, FALSE,
++        thread_id);
++    if (thread != NULL)
++    {
++      DWORD previous_suspend_count;
+ 
+-    if (previous_suspend_count == 0)
+-      details->state = GUM_THREAD_RUNNING;
+-    else
+-      details->state = GUM_THREAD_STOPPED;
++      previous_suspend_count = SuspendThread (thread);
++      if (previous_suspend_count != (DWORD) -1)
++      {
++        if (previous_suspend_count == 0)
++          details->state = GUM_THREAD_RUNNING;
++        else
++          details->state = GUM_THREAD_STOPPED;
++
++        context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
++        if (GetThreadContext (thread, &context))
++        {
++          gum_windows_parse_context (&context, &details->cpu_context);
++          success = TRUE;
++        }
++
++        ResumeThread (thread);
++      }
+ 
+-    context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+-    if (GetThreadContext (thread, &context))
+-    {
+-      gum_windows_parse_context (&context, &details->cpu_context);
+-      success = TRUE;
++      CloseHandle (thread);
+     }
+-
+-    ResumeThread (thread);
+   }
+ 
+-beach:
+-  if (thread != NULL)
+-    CloseHandle (thread);
+-
+-  if (!success)
+-    g_free ((gpointer) details->name);
+-
+   return success;
+ }
+ 
+diff --git a/gum/gumprocess.h b/gum/gumprocess.h
+index 0b6bb9c2..8476d361 100644
+--- a/gum/gumprocess.h
++++ b/gum/gumprocess.h
+@@ -1,7 +1,6 @@
+ /*
+  * Copyright (C) 2008-2023 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+  * Copyright (C) 2020-2024 Francesco Tamagni <mrmacete@protonmail.ch>
+- * Copyright (C) 2023 Grant Douglas <me@hexplo.it>
+  *
+  * Licence: wxWindows Library Licence, Version 3.1
+  */
+@@ -60,7 +59,6 @@ typedef enum {
+ struct _GumThreadDetails
+ {
+   GumThreadId id;
+-  const gchar * name;
+   GumThreadState state;
+   GumCpuContext cpu_context;
+ };
+diff --git a/meson.build b/meson.build
+index 0ad28b24..10206c23 100644
+--- a/meson.build
++++ b/meson.build
+@@ -607,7 +607,7 @@ configure_file(
+ 
+ add_project_arguments(
+   (cc.get_argument_syntax() == 'msvc') ? '/FI' : '-include', meson.current_build_dir() / 'config.h',
+-  '-DG_LOG_DOMAIN="Frida"',
++  '-DG_LOG_DOMAIN="Banana"',
+   '-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_56',
+   '-DG_DISABLE_DEPRECATED',
+   language: languages)
+diff --git a/tests/core/process.c b/tests/core/process.c
+index 8fa67d81..f8c6d36b 100644
+--- a/tests/core/process.c
++++ b/tests/core/process.c
+@@ -2,7 +2,6 @@
+  * Copyright (C) 2008-2023 Ole André Vadla Ravnås <oleavr@nowsecure.com>
+  * Copyright (C) 2008 Christian Berentsen <jc.berentsen@gmail.com>
+  * Copyright (C) 2015 Asger Hautop Drewsen <asgerdrewsen@gmail.com>
+- * Copyright (C) 2023 Grant Douglas <me@hexplo.it>
+  *
+  * Licence: wxWindows Library Licence, Version 3.1
+  */
+@@ -35,7 +34,6 @@
+ TESTLIST_BEGIN (process)
+   TESTENTRY (process_threads)
+   TESTENTRY (process_threads_exclude_cloaked)
+-  TESTENTRY (process_threads_should_include_name)
+   TESTENTRY (process_modules)
+   TESTENTRY (process_ranges)
+   TESTENTRY (process_ranges_exclude_cloaked)
+@@ -108,7 +106,6 @@ struct _TestThreadSyncData
+ {
+   GMutex mutex;
+   GCond cond;
+-  const gchar * name;
+   volatile gboolean started;
+   volatile GumThreadId thread_id;
+   volatile gboolean * volatile done;
+@@ -147,15 +144,13 @@ static gboolean process_potential_export_search_result (
+     const GumExportDetails * details, gpointer user_data);
+ #endif
+ 
+-static GThread * create_sleeping_dummy_thread_sync (const gchar * name,
+-    volatile gboolean * done, GumThreadId * thread_id);
++static GThread * create_sleeping_dummy_thread_sync (volatile gboolean * done,
++    GumThreadId * thread_id);
+ static gpointer sleeping_dummy (gpointer data);
+ static gboolean thread_found_cb (const GumThreadDetails * details,
+     gpointer user_data);
+ static gboolean thread_check_cb (const GumThreadDetails * details,
+     gpointer user_data);
+-static gboolean thread_collect_if_matching_id (const GumThreadDetails * details,
+-    gpointer user_data);
+ static gboolean module_found_cb (const GumModuleDetails * details,
+     gpointer user_data);
+ static gboolean import_found_cb (const GumImportDetails * details,
+@@ -190,10 +185,8 @@ TESTCASE (process_threads)
+   if (!check_thread_enumeration_testable ())
+     return;
+ 
+-  thread_a = create_sleeping_dummy_thread_sync ("process-test-sleeping-dummy-a",
+-      &done, NULL);
+-  thread_b = create_sleeping_dummy_thread_sync ("process-test-sleeping-dummy-b",
+-      &done, NULL);
++  thread_a = create_sleeping_dummy_thread_sync (&done, NULL);
++  thread_b = create_sleeping_dummy_thread_sync (&done, NULL);
+ 
+   ctx.number_of_calls = 0;
+   ctx.value_to_return = TRUE;
+@@ -219,8 +212,7 @@ TESTCASE (process_threads_exclude_cloaked)
+   if (!check_thread_enumeration_testable ())
+     return;
+ 
+-  thread = create_sleeping_dummy_thread_sync ("process-test-sleeping-dummy",
+-      &done, &ctx.needle);
++  thread = create_sleeping_dummy_thread_sync (&done, &ctx.needle);
+ 
+   ctx.found = FALSE;
+   gum_process_enumerate_threads (thread_check_cb, &ctx);
+@@ -238,26 +230,6 @@ TESTCASE (process_threads_exclude_cloaked)
+   g_thread_join (thread);
+ }
+ 
+-TESTCASE (process_threads_should_include_name)
+-{
+-  volatile gboolean done = FALSE;
+-  GThread * thread;
+-  GumThreadDetails d = { 0, };
+-
+-  if (!check_thread_enumeration_testable ())
+-    return;
+-
+-  thread = create_sleeping_dummy_thread_sync ("named", &done, &d.id);
+-  gum_process_enumerate_threads (thread_collect_if_matching_id, &d);
+-
+-  g_assert_cmpstr (d.name, ==, "named");
+-
+-  done = TRUE;
+-  g_thread_join (thread);
+-
+-  g_free ((gpointer) d.name);
+-}
+-
+ static gboolean
+ check_thread_enumeration_testable (void)
+ {
+@@ -1103,8 +1075,7 @@ process_potential_export_search_result (const GumExportDetails * details,
+ #endif
+ 
+ static GThread *
+-create_sleeping_dummy_thread_sync (const gchar * name,
+-                                   volatile gboolean * done,
++create_sleeping_dummy_thread_sync (volatile gboolean * done,
+                                    GumThreadId * thread_id)
+ {
+   TestThreadSyncData sync_data;
+@@ -1114,12 +1085,12 @@ create_sleeping_dummy_thread_sync (const gchar * name,
+   g_cond_init (&sync_data.cond);
+   sync_data.started = FALSE;
+   sync_data.thread_id = 0;
+-  sync_data.name = name;
+   sync_data.done = done;
+ 
+   g_mutex_lock (&sync_data.mutex);
+ 
+-  thread = g_thread_new (name, sleeping_dummy, &sync_data);
++  thread = g_thread_new ("process-test-sleeping-dummy", sleeping_dummy,
++      &sync_data);
+ 
+   while (!sync_data.started)
+     g_cond_wait (&sync_data.cond, &sync_data.mutex);
+@@ -1141,15 +1112,6 @@ sleeping_dummy (gpointer data)
+   TestThreadSyncData * sync_data = data;
+   volatile gboolean * done = sync_data->done;
+ 
+-  /*
+-   * On Linux g_thread_new() may not actually set the thread name, which is due
+-   * to GLib potentially having been prebuilt against an old libc. Therefore we
+-   * set the name manually using pthreads.
+-   */
+-#ifdef HAVE_LINUX
+-  pthread_setname_np (pthread_self (), sync_data->name);
+-#endif
+-
+   g_mutex_lock (&sync_data->mutex);
+   sync_data->started = TRUE;
+   sync_data->thread_id = gum_process_get_current_thread_id ();
+@@ -1185,22 +1147,6 @@ thread_check_cb (const GumThreadDetails * details,
+   return !ctx->found;
+ }
+ 
+-static gboolean
+-thread_collect_if_matching_id (const GumThreadDetails * details,
+-                               gpointer user_data)
+-{
+-  GumThreadDetails * ctx = user_data;
+-
+-  if (details->id != ctx->id)
+-    return TRUE;
+-
+-  ctx->name = g_strdup (details->name);
+-  ctx->state = details->state;
+-  ctx->cpu_context = details->cpu_context;
+-
+-  return FALSE;
+-}
+-
+ static gboolean
+ module_found_cb (const GumModuleDetails * details,
+                  gpointer user_data)
+diff --git a/tests/gumjs/script.c b/tests/gumjs/script.c
+index a1bcbdd6..99f2ed26 100644
+--- a/tests/gumjs/script.c
++++ b/tests/gumjs/script.c
+@@ -4,7 +4,6 @@
+  * Copyright (C) 2020-2021 Francesco Tamagni <mrmacete@protonmail.ch>
+  * Copyright (C) 2020 Marcus Mengs <mame8282@googlemail.com>
+  * Copyright (C) 2021 Abdelrahman Eid <hot3eed@gmail.com>
+- * Copyright (C) 2023 Grant Douglas <me@hexplo.it>
+  *
+  * Licence: wxWindows Library Licence, Version 3.1
+  */
+@@ -196,7 +195,6 @@ TESTLIST_BEGIN (script)
+     TESTENTRY (process_current_thread_id_is_available)
+     TESTENTRY (process_threads_can_be_enumerated)
+     TESTENTRY (process_threads_can_be_enumerated_legacy_style)
+-    TESTENTRY (process_threads_have_names)
+     TESTENTRY (process_modules_can_be_enumerated)
+     TESTENTRY (process_modules_can_be_enumerated_legacy_style)
+     TESTENTRY (process_module_can_be_looked_up_from_address)
+@@ -498,7 +496,6 @@ TESTLIST_END ()
+ 
+ typedef int (* TargetFunctionInt) (int arg);
+ typedef struct _GumInvokeTargetContext GumInvokeTargetContext;
+-typedef struct _GumNamedSleeperContext GumNamedSleeperContext;
+ typedef struct _GumCrashExceptorContext GumCrashExceptorContext;
+ typedef struct _TestTrigger TestTrigger;
+ 
+@@ -510,12 +507,6 @@ struct _GumInvokeTargetContext
+   volatile gint finished;
+ };
+ 
+-struct _GumNamedSleeperContext
+-{
+-  GAsyncQueue * controller_messages;
+-  GAsyncQueue * sleeper_messages;
+-};
+-
+ struct _GumCrashExceptorContext
+ {
+   gboolean called;
+@@ -568,7 +559,6 @@ static gpointer run_stalked_through_target_function (gpointer data);
+ #endif
+ 
+ static gpointer sleeping_dummy (gpointer data);
+-static gpointer named_sleeper (gpointer data);
+ 
+ static gpointer invoke_target_function_int_worker (gpointer data);
+ static gpointer invoke_target_function_trigger (gpointer data);
+@@ -5005,7 +4995,7 @@ TESTCASE (process_threads_can_be_enumerated_legacy_style)
+     return;
+ #endif
+ 
+-#if defined (HAVE_MIPS)
++#if defined (HAVE_ANDROID) || defined (HAVE_MIPS)
+   if (!g_test_slow ())
+   {
+     g_print ("<skipping, run in slow mode> ");
+@@ -5050,64 +5040,6 @@ sleeping_dummy (gpointer data)
+   return NULL;
+ }
+ 
+-TESTCASE (process_threads_have_names)
+-{
+-  GumNamedSleeperContext ctx;
+-  GThread * thread;
+-
+-#ifdef HAVE_LINUX
+-  if (!check_exception_handling_testable ())
+-    return;
+-#endif
+-
+-#ifdef HAVE_MIPS
+-  if (!g_test_slow ())
+-  {
+-    g_print ("<skipping, run in slow mode> ");
+-    return;
+-  }
+-#endif
+-
+-  ctx.controller_messages = g_async_queue_new ();
+-  ctx.sleeper_messages = g_async_queue_new ();
+-
+-  thread = g_thread_new ("named-sleeper", named_sleeper, &ctx);
+-  g_assert_cmpstr (g_async_queue_pop (ctx.controller_messages), ==, "ready");
+-
+-  COMPILE_AND_LOAD_SCRIPT (
+-      "send(Process.enumerateThreads().some(t => t.name === 'named-sleeper'));"
+-  );
+-  EXPECT_SEND_MESSAGE_WITH ("true");
+-  EXPECT_NO_MESSAGES ();
+-
+-  g_async_queue_push (ctx.sleeper_messages, "done");
+-  g_thread_join (thread);
+-
+-  g_async_queue_unref (ctx.sleeper_messages);
+-  g_async_queue_unref (ctx.controller_messages);
+-}
+-
+-static gpointer
+-named_sleeper (gpointer data)
+-{
+-  GumNamedSleeperContext * ctx = data;
+-
+-  /*
+-   * On Linux g_thread_new() may not actually set the thread name, which is due
+-   * to GLib potentially having been prebuilt against an old libc. Therefore we
+-   * set the name manually using pthreads.
+-   */
+-#ifdef HAVE_LINUX
+-  pthread_setname_np (pthread_self (), "named-sleeper");
+-#endif
+-
+-  g_async_queue_push (ctx->controller_messages, "ready");
+-
+-  g_assert_cmpstr (g_async_queue_pop (ctx->sleeper_messages), ==, "done");
+-
+-  return NULL;
+-}
+-
+ TESTCASE (process_modules_can_be_enumerated)
+ {
+   COMPILE_AND_LOAD_SCRIPT (
+diff --git a/tests/run-corellium.sh b/tests/run-corellium.sh
+deleted file mode 100755
+index c10df3a9..00000000
+--- a/tests/run-corellium.sh
++++ /dev/null
+@@ -1,75 +0,0 @@
+-#!/bin/bash
+-
+-host_os=$1
+-host_arch=arm64
+-
+-case $host_os in
+-  ios)
+-    device="ios-12.5.7-arm64"
+-    ;;
+-  android)
+-    device="android-8.1.0-arm64"
+-    ;;
+-  *)
+-    echo "Usage: $0 ios|android" > /dev/stderr
+-    exit 1
+-esac
+-
+-if [ -z "$GH_TOKEN" ]; then
+-  echo "Missing GH_TOKEN environment variable" > /dev/stderr
+-  exit 1
+-fi
+-
+-build_os=$(echo $(uname -s | tr '[A-Z]' '[a-z]' | sed 's,^darwin$,macos,'))
+-build_arch=$(uname -m)
+-
+-gum_tests=$(dirname "$0")
+-
+-runner_tarball=$(mktemp -t gum-tests.XXXXXX)
+-runner_script=$(mktemp -t gum-tests.XXXXXX)
+-
+-function dispose {
+-  rm -f "$runner_tarball"
+-  rm -f "$runner_script"
+-}
+-trap dispose EXIT
+-
+-set -ex
+-
+-cd "$gum_tests/../../build"
+-. frida-env-$build_os-$build_arch.rc
+-
+-cd tmp-$host_os-$host_arch/frida-gum
+-ninja
+-
+-cd tests
+-tar czf "$runner_tarball" gum-tests data/
+-
+-case $host_os in
+-  ios)
+-    cat << EOF > "$runner_script"
+-cd /usr/local
+-rm -rf opt/frida
+-mkdir -p opt/frida
+-cd opt/frida
+-tar xf \$ASSET_PATH
+-./gum-tests
+-EOF
+-    ;;
+-  android)
+-    cat << EOF > "$runner_script"
+-cd /data/local/tmp
+-tar xf \$ASSET_PATH
+-./gum-tests
+-EOF
+-    ;;
+-esac
+-
+-curl \
+-    https://corellium.frida.re/devices/$device \
+-    --form "asset=@$runner_tarball" \
+-    --form "script=<$runner_script" \
+-    --form-string $'marker=\n*** Finished with exit code: ' \
+-    --form-string "token=$GH_TOKEN" \
+-    -N \
+-    -v
