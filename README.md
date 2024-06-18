@@ -38,11 +38,10 @@ cd frida/frida-gum && git apply --reject --whitespace=fix ../../frida-gum/patch.
 			- Frida Portal: `build/frida-android-arm64/bin/frida-portal`
 			- Frida Server: `build/frida-android-arm64/bin/frida-server`
 	- Copy needed binaries to Android Device and enjoy the patch!
-3. Probably consider non-frida techniques like [patching system libraries](https://github.com/AsenOsen/android-framework-jar-patching).
-
 
 # Advices how to achive even more stealthy mode
 
 1. Use ZygiskFrida(https://github.com/lico-n/ZygiskFrida) to avoid process being ptraced. Important notice: use this module for Kitsune Magisk (https://github.com/HuskyDG/magisk-files). Do not use ZygiskFrida with usual Magisk - module will not work.
 2. When using ZygiskFrida, use patched `frida-gadget.so`!
 3. Use frida scripts from this repo - https://github.com/apkunpacker/AntiFrida_Bypass - to hide any other possible traces of frida/magisk in memory.
+4. Consider some uncommon techniques like [patching system libraries](https://github.com/AsenOsen/android-framework-jar-patching).
