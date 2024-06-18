@@ -38,6 +38,7 @@ cd frida/frida-gum && git apply --reject --whitespace=fix ../../frida-gum/patch.
 			- Frida Portal: `build/frida-android-arm64/bin/frida-portal`
 			- Frida Server: `build/frida-android-arm64/bin/frida-server`
 	- Copy needed binaries to Android Device and enjoy the patch!
+3. Probably consider non-frida techniques like [patching system libraries](https://github.com/AsenOsen/android-framework-jar-patching).
 
 
 # Advices how to achive even more stealthy mode
