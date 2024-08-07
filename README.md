@@ -1,5 +1,8 @@
 # Stealth patch for Frida!
 
+**FIRST OF ALL! Tired of Frida getting detected all the time?**  
+Try [my revolutionary(duh) approach](https://github.com/AsenOsen/android-framework-jar-patching) based on injecting code into system Android libraries.  
+
 The patch set was inspired by this repo - https://github.com/JsHookApp/Frida-Patchs. This patch hides most of frida traces in system:
 
 - default port number changed
